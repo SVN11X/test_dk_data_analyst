@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quiz aleatorio (Databricks)</title>
+    <meta name="description" content="Muestra preguntas aleatorias desde un JSON y permite comprobar la respuesta." />
+    <style>
+      :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif; }
+      body { margin: 0; background: #0f172a; color: #e2e8f0; }
+      .wrap { max-width: 920px; margin: 0 auto; padding: 24px; }
+      .card {
+        background: #111827; border: 1px solid #1f2937; border-radius: 16px;
+        padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,.35);
+      }
+      h1 { margin: 0 0 8px; font-size: 1.6rem; color: #f8fafc; }
+      .sub { color: #9ca3af; margin: 0 0 16px; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+      .grow { flex: 1 1 auto; }
+      select, button {
+        border: 1px solid #1f2937; background: #0b1220; color: #e2e8f0;
+        padding: 10px 12px; border-radius: 10px; font-weight: 600;
+      }
+      button.primary { background: #0ea5e9; color: #05121e; }
+      .qbox { margin-top: 16px; padding: 16px; border-radius: 12px; background: #0b1220; border: 1px solid #1f2937; }
+      .cat { font-size: .9rem; color: #93c5fd; margin-bottom: 8px; }
+      .question { font-size: 1.2rem; font-weight: 700; margin: 8px 0 12px; color: #f8fafc; }
+      .options { display: grid; gap: 10px; }
+      .opt {
+        display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: start;
+        padding: 10px; border: 1px solid #1f2937; border-radius: 10px; background: #0f172a;
+      }
+      .opt.correct { outline: 2px solid #22c55e; }
+      .opt.incorrect { outline: 2px solid #ef4444; }
+      .actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+      .explain { margin-top: 14px; padding: 12px; border-left: 3px solid #334155; background: #0b1220; border-radius: 8px; color: #cbd5e1; }
+      .sources { margin-top: 8px; font-size: .95rem; }
+      .sources a { color: #93c5fd; text-decoration: none; }
+      .muted { color: #9ca3af; font-size: .92rem; margin-top: 10px; }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>🧪 Quiz aleatorio (Databricks)</h1>
+        <p class="sub">Usa <code>assets/data/databricks_exam_QA_english_clean_explicit_sources.json</code> como fuente.</p>
+
+        <div class="row">
+          <label for="catSel" class="muted">Categoría:</label>
+          <select id="catSel"></select>
+          <div class="grow"></div>
+          <button id="btn-next" class="primary">Otra pregunta</button>
+          <button id="btn-check">Comprobar</button>
+          <button id="btn-reveal">Mostrar solución</button>
+        </div>
+
+        <div id="qwrap" class="qbox">
+          <div id="cat" class="cat"></div>
+          <div id="question" class="question">Cargando…</div>
+          <div id="options" class="options"></div>
+          <div id="feedback" class="muted hidden"></div>
+          <div id="explain" class="explain hidden"></div>
+          <div id="sources" class="sources hidden"></div>
+        </div>
+
+        <div id="status" class="muted"></div>
+      </div>
+    </div>
+
+    <script>
+      const DATA_PATH = "assets/data/databricks_exam_QA_english_clean_explicit_sources.json";
+
+      /** @typedef {{question:string, options:string[], answer:number, category?:string, explanation?:string, sources?:string[]}} QA */
+
+      /** @type {QA[]} */
+      let dataset = [];
+      /** @type {QA[]} */
+      let filtered = [];
+      let lastIdx = -1;
+      let current = /** @type {QA|null} */(null);
+
+      const elCatSel = document.getElementById("catSel");
+      const elCat = document.getElementById("cat");
+      const elQ = document.getElementById("question");
+      const elOps = document.getElementById("options");
+      const elFeedback = document.getElementById("feedback");
+      const elExplain = document.getElementById("explain");
+      const elSources = document.getElementById("sources");
+      const elStatus = document.getElementById("status");
+
+      function setStatus(msg) { elStatus.textContent = msg || ""; }
+      function show(el, on) { el.classList.toggle("hidden", !on); }
+
+      async function loadJSON() {
+        try {
+          const res = await fetch(DATA_PATH, { cache: "no-store" });
+          if (!res.ok) {
+            setStatus("[No verificado] No pude cargar el JSON (" + res.status + "). Revisa la ruta.");
+            return;
+          }
+          /** @type {QA[]} */
+          const data = await res.json();
+          dataset = Array.isArray(data) ? data.filter(validQA) : [];
+          if (dataset.length === 0) {
+            setStatus("[No verificado] El JSON está vacío o no tiene el formato esperado.");
+            return;
+          }
+          initCategories(dataset);
+          applyFilter();
+          nextRandom();
+          setStatus("Cargadas " + dataset.length + " preguntas.");
+        } catch (err) {
+          console.error(err);
+          setStatus("[No verificado] Error leyendo el JSON (ver consola).");
+        }
+      }
+
+      function validQA(obj) {
+        return obj && typeof obj.question === "string"
+          && Array.isArray(obj.options) && Number.isInteger(obj.answer)
+          && obj.answer >= 0 && obj.answer < obj.options.length;
+      }
+
+      function initCategories(items) {
+        const cats = new Set(items.map(q => q.category || "Sin categoría"));
+        elCatSel.innerHTML = "";
+        const optAll = document.createElement("option");
+        optAll.value = "__ALL__";
+        optAll.textContent = "Todas las categorías";
+        elCatSel.appendChild(optAll);
+        for (const c of Array.from(cats).sort()) {
+          const o = document.createElement("option");
+          o.value = c;
+          o.textContent = c;
+          elCatSel.appendChild(o);
+        }
+        elCatSel.addEventListener("change", () => {
+          applyFilter();
+          nextRandom(true);
+        });
+      }
+
+      function applyFilter() {
+        const val = elCatSel.value || "__ALL__";
+        if (val === "__ALL__") {
+          filtered = dataset.slice();
+        } else {
+          filtered = dataset.filter(q => (q.category || "Sin categoría") === val);
+        }
+        lastIdx = -1;
+      }
+
+      function pickIdx(n) {
+        if (n <= 1) return 0;
+        let idx;
+        do { idx = Math.floor(Math.random() * n); } while (idx === lastIdx && n > 1);
+        lastIdx = idx;
+        return idx;
+      }
+
+      function nextRandom(clearFeedback = false) {
+        if (filtered.length === 0) {
+          setStatus("[No verificado] No hay preguntas que coincidan con el filtro.");
+          return;
+        }
+        current = filtered[pickIdx(filtered.length)];
+        renderQA(current, clearFeedback);
+      }
+
+      function renderQA(q, clearFeedback = false) {
+        elCat.textContent = q.category ? "Categoría: " + q.category : "Categoría: Sin categoría";
+        elQ.textContent = q.question;
+
+        elOps.innerHTML = "";
+        q.options.forEach((text, i) => {
+          const wrap = document.createElement("label");
+          wrap.className = "opt";
+          const radio = document.createElement("input");
+          radio.type = "radio"; radio.name = "opt"; radio.value = String(i);
+          const span = document.createElement("div");
+          span.textContent = text;
+          wrap.appendChild(radio); wrap.appendChild(span);
+          elOps.appendChild(wrap);
+        });
+
+        // limpiar estados
+        for (const node of elOps.children) node.classList.remove("correct", "incorrect");
+        if (clearFeedback) {
+          show(elFeedback, false);
+          show(elExplain, false);
+          show(elSources, false);
+        } else {
+          show(elFeedback, false);
+          show(elExplain, false);
+          show(elSources, false);
+        }
+      }
+
+      function selectedIndex() {
+        const sel = /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('input[name="opt"]'));
+        for (const r of sel) if (r.checked) return Number(r.value);
+        return -1;
+      }
+
+      function checkAnswer(revealIfNone = false) {
+        if (!current) return;
+        const idx = selectedIndex();
+        const correct = current.answer;
+
+        [...elOps.children].forEach((node, i) => {
+          node.classList.remove("correct", "incorrect");
+        });
+
+        if (idx === -1 && revealIfNone) {
+          // marca solo la correcta
+          const node = /** @type {HTMLElement} */ (elOps.children[correct]);
+          if (node) node.classList.add("correct");
+          elFeedback.textContent = "Solución mostrada.";
+          show(elFeedback, true);
+        } else if (idx === -1) {
+          elFeedback.textContent = "Selecciona una opción y presiona «Comprobar».";
+          show(elFeedback, true);
+          return;
+        } else {
+          const chosen = /** @type {HTMLElement} */ (elOps.children[idx]);
+          const right = /** @type {HTMLElement} */ (elOps.children[correct]);
+          if (idx === correct) {
+            if (right) right.classList.add("correct");
+            elFeedback.textContent = "✅ ¡Correcto!";
+          } else {
+            if (chosen) chosen.classList.add("incorrect");
+            if (right) right.classList.add("correct");
+            elFeedback.textContent = "❌ Incorrecto.";
+          }
+          show(elFeedback, true);
+        }
+
+        // explicación
+        const exp = current.explanation || "";
+        elExplain.textContent = exp ? "Explicación: " + exp : "Sin explicación disponible.";
+        show(elExplain, true);
+
+        // fuentes
+        const srcs = Array.isArray(current.sources) ? current.sources : [];
+        if (srcs.length) {
+          elSources.innerHTML = "Fuentes: " + srcs.map(u => `<a href="${u}" target="_blank" rel="noopener">link</a>`).join(" · ");
+          show(elSources, true);
+        } else {
+          elSources.textContent = "";
+          show(elSources, false);
+        }
+      }
+
+      document.getElementById("btn-next").addEventListener("click", () => nextRandom(true));
+      document.getElementById("btn-check").addEventListener("click", () => checkAnswer(false));
+      document.getElementById("btn-reveal").addEventListener("click", () => checkAnswer(true));
+
+      // inicio
+      document.addEventListener("DOMContentLoaded", loadJSON);
+    </script>
+  </body>
+</html>
