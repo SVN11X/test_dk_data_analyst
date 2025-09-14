@@ -11415,7 +11415,7 @@
     ]
   },
   {
-    "question": "Which dos seguintes é um componente essencial do Apache Spark para processamento de data estruturados?",
+    "question": "Which of the following is an essential component of Apache Spark for processing structured data?",
     "options": [
       "Spark Streaming",
       "Spark SQL",
@@ -11424,12 +11424,13 @@
       "Spark Core"
     ],
     "answer": 1,
-    "category": "Conceitos Spark",
-    "explanation": "A opção B está correta porwhat o Spark SQL é o componente do Apache Spark usado para processamento de data estruturados. As outras opções são componentes para outras funcionalidades.",
+    "category": "Spark Concepts",
+    "explanation": "Option B is correct because Spark SQL is the Apache Spark component used for processing structured data. The other options are components for other functionalities.",
     "sources": [
       "https://docs.databricks.com/en/sql/language-manual/index.html"
     ]
   },
+
   {
     "question": "In Databricks, which command is used to export a DataFrame 'df' to a CSV file at location '/tmp/data.csv'?",
     "options": [
@@ -11450,19 +11451,20 @@
     ]
   },
   {
-    "question": "Em Spark, which é o propósito do 'persist()' em comparação com 'cache()'?",
+    "question": "In Spark, what is the purpose of 'persist()' compared to 'cache()'?",
     "options": [
-      "'persist()' armazena os data em memória; 'cache()' armazena em disco.",
-      "'persist()' permite escolher o nível de storage; 'cache()' é equivalente a 'persist(StorageLevel.MEMORY_ONLY)'.",
-      "'persist()' salva o DataFrame no sistema de arquivos; 'cache()' salva temporariamente.",
-      "'persist()' é usado para data estruturados; 'cache()' para data não estruturados.",
-      "'persist()' e obsoleto e substituido por 'cache()'."
+      "'persist()' stores the data in memory; 'cache()' stores it on disk.",
+      "'persist()' lets you choose the storage level; 'cache()' is equivalent to 'persist(StorageLevel.MEMORY_ONLY)'.",
+      "'persist()' saves the DataFrame to the file system; 'cache()' saves it temporarily.",
+      "'persist()' is used for structured data; 'cache()' for unstructured data.",
+      "'persist()' is obsolete and has been replaced by 'cache()'."
     ],
     "answer": 1,
-    "category": "Otimizacao Spark",
-    "explanation": "A opção B está correta porwhat `persist()` permite especificar o nível de storage (memória, disco, etc.), enquanto `cache()` é um atalho para `persist(StorageLevel.MEMORY_ONLY)`. As outras opções não descrevem corretamente as diferenças entre os dois métodos.",
+    "category": "Spark Optimization",
+    "explanation": "Option B is correct because `persist()` allows you to specify the storage level (memory, disk, etc.), while `cache()` is a shortcut for `persist(StorageLevel.MEMORY_ONLY)`. The other options do not correctly describe the differences between the two methods.",
     "sources": [
       "https://docs.databricks.com/en/sql/language-manual/index.html"
     ]
   }
+
 ]
